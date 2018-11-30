@@ -2,6 +2,7 @@
 const shortid = require('shortid');
 const Crypto = require('crypto');
 const Twilio = require('twilio');
+const Logger = require("../../logger.js");
 
 const validateInit = require('./methods/validateInit');
 
@@ -59,11 +60,12 @@ module.exports = {
     //This causes validation to fail. For now forcing https.
     //console.log(request.connection.info)
     //Validate Request
-    const url = 'https://' 
-    + request.info.host 
-    + request.url.path;
-    const twilioSignature = request.headers['x-twilio-signature'];
-    let validation = Twilio.validateRequest(channel.authToken, twilioSignature, url, payload)
+      const url = (request.headers.schema || "https") + "://"
+      + (request.headers.host || request.info.host)
+      + (request.headers.basePath || "")
+      + (request.headers.path || request.url.path);
+      const twilioSignature = request.headers["x-twilio-signature"];
+      const validation = Twilio.validateRequest(channel.authToken, twilioSignature, url, payload);
 
     if (validation) {
       if (payload.From && payload.Body) {
@@ -80,13 +82,17 @@ module.exports = {
               }
             }
           }
-    
-          server.inject(options, (res) => {
-    
-            var twiml = new Twilio.twiml.MessagingResponse();
-            twiml.message(JSON.parse(res.payload).textResponse);
-    
-            reply(twiml.toString()).header('Content-Type', 'text/xml').code(200);
+
+            const requestStart = new Date();
+            server.inject(options, (res) => {
+
+                const requestTime = new Date() - requestStart;
+                const twiml = new Twilio.twiml.MessagingResponse();
+                twiml.message(JSON.parse(res.payload).textResponse);
+
+                Logger.log(options.payload, JSON.parse(res.payload), requestTime);
+
+                reply(twiml.toString()).header('Content-Type', 'text/xml').code(200);
           })
         }
       } else {
